@@ -44,7 +44,7 @@ void processCommand(String cmd) {
   } 
 
 /* //analogWrite kullanmama rağmen çalışmıyor bu aşagıdaki kısım
-
+   //analogWrite yerine esp32de ledcWrite kullanılıyor genelde ama o da çalışmadı.
   else if (cmd.equals("LPWM")) {
     for (int brightness = 0; brightness <= 255; brightness++) {
       analogWrite(ledPin, brightness); 
