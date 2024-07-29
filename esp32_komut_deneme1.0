@@ -1,0 +1,59 @@
+#include <Arduino.h>
+#include <driver/ledc.h>
+
+const int ledPin = 2;
+
+String command = "";  // Seri porttan gelen komutu tutmak için
+
+// processCommand fonksiyon bildirimini ekleyin
+void processCommand(String cmd);
+
+void setup() {
+  pinMode(ledPin, OUTPUT); 
+  Serial.begin(115200);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char c = Serial.read(); // Seri porttan bir karakter oku
+    if (c == '\n') { // Eğer yeni satır karakteri geldiyse komutu işle
+      processCommand(command);
+      command = ""; // Komutu işledikten sonra sıfırla
+    } else {
+      command += c; // Gelen karakteri komuta ekle
+    }
+  }
+}
+
+void processCommand(String cmd) {
+  cmd.trim(); // Komutun başındaki ve sonundaki boşlukları kaldır
+
+  if (cmd.equals("L0")) {
+    digitalWrite(ledPin, HIGH);
+
+  } 
+  else if (cmd.startsWith("L") && cmd.length() > 1) {
+    int numBlinks = cmd.substring(1).toInt(); 
+    // 'L' karakterinden sonraki sayıyı al
+    for (int i = 0; i < numBlinks; i++) {
+      digitalWrite(ledPin, HIGH);
+      delay(500); 
+      digitalWrite(ledPin, LOW);
+      delay(500); 
+    }
+  } 
+
+/* //analogWrite kullanmama rağmen çalışmıyor bu aşagıdaki kısım
+
+  else if (cmd.equals("LPWM")) {
+    for (int brightness = 0; brightness <= 255; brightness++) {
+      analogWrite(ledPin, brightness); 
+      delay(10);
+    }
+    for (int brightness = 255; brightness >= 0; brightness--) {
+      analogWrite(ledPin, brightness);
+      delay(10);
+    }
+  }*/
+
+}
