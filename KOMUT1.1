@@ -1,0 +1,97 @@
+#include <Arduino.h>
+#include <driver/ledc.h>
+#include <DHT.h>
+
+const int ledPin = 2;
+const int DHTPin = 4; // DHT11 sensörünün bağlı olduğu pin
+#define DHTTYPE DHT11
+
+DHT dht(DHTPin, DHTTYPE);
+String command = "";  // Seri porttan gelen komutu tutmak için
+
+void setup() {
+  pinMode(ledPin, OUTPUT); 
+  Serial.begin(115200);
+  dht.begin();
+  Serial.println("DHT11 Sıcaklık ve Nem Sensörü Başlatıldı");
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char c = Serial.read(); // Seri porttan bir karakter oku
+    if (c == '\n') { // Eğer yeni satır karakteri geldiyse komutu işle
+      processCommand(command);
+      command = ""; // Komutu işledikten sonra sıfırla
+    } else {
+      command += c; // Gelen karakteri komuta ekle
+    }
+  }
+}
+
+void processCommand(String cmd) {
+  cmd.trim(); // Komutun başındaki ve sonundaki boşlukları kaldır
+
+  if (cmd.equals("L0")) {
+    digitalWrite(ledPin, HIGH);
+  } 
+  else if (cmd.startsWith("L") && cmd.length() > 1) {
+    int numBlinks = cmd.substring(1).toInt(); 
+    // 'L' karakterinden sonraki sayıyı al
+    for (int i = 0; i < numBlinks; i++) {
+      digitalWrite(ledPin, HIGH);
+      delay(500); 
+      digitalWrite(ledPin, LOW);
+      delay(500); 
+    }
+  } 
+  else if (cmd.equals("LPWM")) {
+    for (int brightness = 0; brightness <= 255; brightness++) {
+      analogWrite(ledPin, brightness); 
+      delay(10);
+    }
+    for (int brightness = 255; brightness >= 0; brightness--) {
+      analogWrite(ledPin, brightness);
+      delay(10);
+    }
+  }
+  else if (cmd.equals("S1")) {
+    // Sıcaklık ölçme
+    float temperature = dht.readTemperature();
+    if (isnan(temperature)) {
+      Serial.println("Sıcaklık okunamadı!");
+    } else {
+      Serial.print("Sıcaklık: ");
+      Serial.print(temperature);
+      Serial.println(" °C");
+    }
+  } 
+  else if (cmd.equals("N1")) {
+    // Nem ölçme
+    float humidity = dht.readHumidity();
+    if (isnan(humidity)) {
+      Serial.println("Nem okunamadı!");
+    } else {
+      Serial.print("Nem: ");
+      Serial.print(humidity);
+      Serial.println(" %");
+    }
+  } 
+  else if (cmd.equals("SN")) {
+    // Hem sıcaklık hem nem ölçme
+    float temperature = dht.readTemperature();
+    float humidity = dht.readHumidity();
+    if (isnan(temperature) || isnan(humidity)) {
+      Serial.println("Sıcaklık veya nem okunamadı!");
+    } else {
+      Serial.print("Sıcaklık: ");
+      Serial.print(temperature);
+      Serial.println(" °C");
+      Serial.print("Nem: ");
+      Serial.print(humidity);
+      Serial.println(" %");
+    }
+  }
+  else {
+    Serial.println("Geçersiz komut!");
+  }
+}
