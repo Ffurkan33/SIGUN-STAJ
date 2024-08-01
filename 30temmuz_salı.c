@@ -1,6 +1,5 @@
 /* tüm komutlar hatasız çalışıyor*/
-```markdown
-```cpp
+
 #include <Arduino.h>
 #include <driver/ledc.h>
 #include <DHT.h>
