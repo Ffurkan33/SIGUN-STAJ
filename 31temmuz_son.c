@@ -1,9 +1,10 @@
-/* tüm komutlar hatasız çalışıyor*/
-
 #include <Arduino.h>
-#include <driver/ledc.h>
 #include <DHT.h>
 #include "esp_log.h"
+#include <driver/ledc.h>
+
+void processCommand(String cmd);
+void resetLedState();
 
 const int ledPin = 2;
 const int DHTPin = 5; // DHT11 sensörünün bağlı olduğu pin
@@ -14,8 +15,17 @@ String command = "";  // Seri porttan gelen komutu tutmak için
 
 static const char *TAG = "example";
 
+// LED Durum Makinesi Değişkenleri
+enum LedState { IDLE, BLINKING, PWM } ledState = IDLE;
+unsigned long previousMillis = 0;
+int blinkCount = 0;
+int blinkTimes = 0;
+int pwmValue = 0;
+int pwmDirection = 1;
+int pwmCount = 0;
+
 void setup() {
-  pinMode(ledPin, OUTPUT); 
+  pinMode(ledPin, OUTPUT);
   Serial.begin(115200);
   dht.begin();
   ESP_LOGI(TAG, "DHT11 Sıcaklık ve Nem Sensörü Başlatıldı");
@@ -31,6 +41,32 @@ void loop() {
       command += c; // Gelen karakteri komuta ekle
     }
   }
+
+  unsigned long currentMillis = millis();
+
+  if (ledState == BLINKING && currentMillis - previousMillis >= 500) {
+    previousMillis = currentMillis;
+    digitalWrite(ledPin, !digitalRead(ledPin));
+    blinkCount++;
+    if (blinkCount >= blinkTimes * 2) { // LED her blink için 2 kez değişir (aç/kapa)
+      resetLedState();
+    }
+  }
+
+  if (ledState == PWM && currentMillis - previousMillis >= 10) {
+    previousMillis = currentMillis;
+    pwmValue += pwmDirection;
+    if (pwmValue <= 0 || pwmValue >= 255) {
+      pwmDirection = -pwmDirection;
+      if (pwmDirection == 1) { // Parlama ve sönme tamamlandı
+        pwmCount++;
+        if (pwmCount >= blinkTimes) {
+          resetLedState();
+        }
+      }
+    }
+    analogWrite(ledPin, pwmValue); // PWM yaz
+  }
 }
 
 void processCommand(String cmd) {
@@ -38,39 +74,29 @@ void processCommand(String cmd) {
   ESP_LOGI(TAG, "Komut alındı: %s", cmd.c_str());
 
   if (cmd.equals("L0")) {
+    resetLedState();
     digitalWrite(ledPin, HIGH);
     ESP_LOGI(TAG, "LED yakıldı.");
-  } 
-  else if (cmd.startsWith("L") && cmd.length() > 1) {
-    int numBlinks = cmd.substring(1).toInt(); 
-    // 'L' karakterinden sonraki sayıyı al
-    ESP_LOGI(TAG, "LED %d kez yanıp sönecek.", numBlinks);
-    for (int i = 0; i < numBlinks; i++) {
-      digitalWrite(ledPin, HIGH);
-      delay(500); 
-      digitalWrite(ledPin, LOW);
-      delay(500); 
-    }
-  } 
 
-else if (cmd.startsWith("A") && cmd.length() > 1) {
-    int numBlinks = cmd.substring(1).toInt();
-    ESP_LOGI(TAG, "LED %d kez parlayıp sönmeye başlayacak.", numBlinks); 
-    for (int i = 0; i < numBlinks; i++) {
-      // PWM ile parlama ve sönme işlemi kaç kez istiyorsak (A1,A2,A3...)
-      for (int brightness = 0; brightness < 255; brightness++) {
-        analogWrite(ledPin, brightness); 
-        delay(10);
-      }
-      for (int brightness = 254; brightness >= 0; brightness--) {
-        analogWrite(ledPin, brightness);
-        delay(10);
-      }
-      delay(500); // Parlama ve sönme arasına biraz bekleme ekle
-    }
-  }
+  } else if (cmd.startsWith("L") && cmd.length() > 1) {
+    resetLedState();
+    blinkTimes = cmd.substring(1).toInt();
+    blinkCount = 0;
+    previousMillis = millis();
+    ledState = BLINKING;
+    ESP_LOGI(TAG, "LED %d kez yanıp sönmeye başlayacak.", blinkTimes);
 
-  else if (cmd.equals("S1")) {
+  } else if (cmd.startsWith("A") && cmd.length() > 1) {
+    resetLedState();
+    blinkTimes = cmd.substring(1).toInt();
+    pwmValue = 0;
+    pwmDirection = 1;
+    pwmCount = 0;
+    previousMillis = millis();
+    ledState = PWM;
+    ESP_LOGI(TAG, "LED %d kez PWM ile parlayıp sönmeye başlayacak.", blinkTimes);
+
+  } else if (cmd.equals("S1")) {
     // Sıcaklık ölçme
     float temperature = dht.readTemperature();
     if (isnan(temperature)) {
@@ -82,8 +108,8 @@ else if (cmd.startsWith("A") && cmd.length() > 1) {
       Serial.print(temperature);
       Serial.println(" °C");
     }
-  } 
-  else if (cmd.equals("N1")) {
+
+  } else if (cmd.equals("N1")) {
     // Nem ölçme
     float humidity = dht.readHumidity();
     if (isnan(humidity)) {
@@ -95,8 +121,8 @@ else if (cmd.startsWith("A") && cmd.length() > 1) {
       Serial.print(humidity);
       Serial.println(" %");
     }
-  } 
-  else if (cmd.equals("SN")) {
+  
+  } else if (cmd.equals("SN")) {
     // Hem sıcaklık hem nem ölçme
     float temperature = dht.readTemperature();
     float humidity = dht.readHumidity();
@@ -112,9 +138,18 @@ else if (cmd.startsWith("A") && cmd.length() > 1) {
       Serial.print(humidity);
       Serial.println(" %");
     }
-  }
-  else {
+  } else {
     ESP_LOGW(TAG, "Geçersiz komut: %s", cmd.c_str());
     Serial.println("Geçersiz komut!");
   }
+}
+
+void resetLedState() {
+  ledState = IDLE;
+  digitalWrite(ledPin, LOW); // LED'i kapat
+  pwmValue = 0;
+  pwmCount = 0;
+  pwmDirection = 1;
+  blinkCount = 0;
+  blinkTimes = 0;
 }
